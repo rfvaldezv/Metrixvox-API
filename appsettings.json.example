@@ -1,13 +1,18 @@
 ﻿{
-  ""ConnectionStrings"": {
-    ""DefaultConnection"": ""Server=TU_SERVIDOR\MSSQLSERVER2019;Database=metrixvoxAPI;User Id=sa;Password=TU_PASSWORD;TrustServerCertificate=True;""
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=TU_SERVIDOR\\MSSQLSERVER2019;Database=metrixvoxAPI;User Id=sa;Password=TU_PASSWORD;TrustServerCertificate=True;"
   },
-  ""Logging"": {
-    ""LogLevel"": {
-      ""Default"": ""Information"",
-      ""Microsoft.AspNetCore"": ""Warning"",
-      ""Microsoft.EntityFrameworkCore.Database.Command"": ""Warning""
+  "Jwt": {
+    "SecretKey": "CAMBIAR_ESTA_CLAVE_POR_UNA_DE_AL_MENOS_64_CARACTERES_ALEATORIOS",
+    "Issuer": "api.metrixvox.com",
+    "Audience": "metrixvox",
+    "ExpirationMinutes": 60
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
     }
   },
-  ""AllowedHosts"": ""*""
+  "AllowedHosts": "*"
 }

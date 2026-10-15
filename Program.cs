@@ -1,5 +1,8 @@
-using MetrixVox.Api.Middleware;
+using System.Text;
 using MetrixVox.Application.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using MetrixVox.Api.Middleware;
 using MetrixVox.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -37,7 +40,45 @@ builder.Services.AddDbContext<TenantDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
+// ============================================================
+// JWT Authentication
+// ============================================================
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var jwtKey = jwtSection["SecretKey"]
+    ?? throw new InvalidOperationException("Falta Jwt:SecretKey en appsettings.json");
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSection["Issuer"] ?? "api.metrixvox.com",
+        ValidAudience = jwtSection["Audience"] ?? "metrixvox",
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        ClockSkew = TimeSpan.FromMinutes(2),
+    };
+});
+
+builder.Services.AddAuthorization();
+
+// Servicios de autenticación
+builder.Services.AddSingleton<IJwtService, JwtService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddAuthorization();
+
+// Servicios de autenticación
+builder.Services.AddSingleton<IJwtService, JwtService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+// builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
@@ -60,9 +101,9 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseCors("MetrixVoxCorsPolicy");
+app.UseAuthentication();           // 🆕 AGREGAR
 app.UseMiddleware<TenantMiddleware>();
-app.UseAuthorization();
-
+app.UseAuthorization();            // ya estaba
 app.MapControllers();
 
 app.Run();

@@ -3,7 +3,12 @@ using MetrixVox.Infrastructure.Persistence;
 
 namespace MetrixVox.Api.Middleware
 {
-    // TEMPORAL: en el paso 2 (seguridad) el tenant saldrá del token JWT y no de un header editable.
+    /// <summary>
+    /// Resuelve el TenantId activo para cada request.
+    /// Fuentes, en orden de prioridad:
+    ///   1. Claim "tenantId" del JWT (usuarios autenticados)
+    ///   2. Header X-Tenant-Id (kioscos / legacy)
+    /// </summary>
     public class TenantMiddleware
     {
         private static readonly Regex ValidTenant = new("^[A-Z0-9_]{3,64}$", RegexOptions.Compiled);
@@ -16,20 +21,38 @@ namespace MetrixVox.Api.Middleware
 
         public async Task InvokeAsync(HttpContext context, TenantContext tenantContext)
         {
-            // Las peticiones preflight de CORS no llevan headers personalizados
-            if (context.Request.Path.StartsWithSegments("/api") && !HttpMethods.IsOptions(context.Request.Method))
+            // Preflight de CORS no lleva headers personalizados
+            if (!context.Request.Path.StartsWithSegments("/api") ||
+                HttpMethods.IsOptions(context.Request.Method))
             {
-                var tenantId = context.Request.Headers["X-Tenant-Id"].ToString().Trim().ToUpperInvariant();
+                await _next(context);
+                return;
+            }
 
-                // Solo letras, números y guion bajo: evita cualquier valor malicioso
-                if (!ValidTenant.IsMatch(tenantId))
+            // 1) ¿JWT con claim tenantId?
+            var jwtTenant = context.User?.FindFirst("tenantId")?.Value;
+            if (!string.IsNullOrWhiteSpace(jwtTenant))
+            {
+                tenantContext.TenantId = jwtTenant.Trim().ToUpperInvariant();
+                await _next(context);
+                return;
+            }
+
+            // 2) Header X-Tenant-Id (kioscos / legacy)
+            var headerTenant = context.Request.Headers["X-Tenant-Id"].ToString().Trim().ToUpperInvariant();
+            if (!string.IsNullOrWhiteSpace(headerTenant))
+            {
+                if (!ValidTenant.IsMatch(headerTenant))
                 {
                     context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await context.Response.WriteAsJsonAsync(new { error = "El header X-Tenant-Id es obligatorio y solo admite letras, números y guion bajo (3 a 64 caracteres)." });
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        error = "El header X-Tenant-Id solo admite letras, números y guion bajo (3-64 caracteres)."
+                    });
                     return;
                 }
 
-                tenantContext.TenantId = tenantId;
+                tenantContext.TenantId = headerTenant;
             }
 
             await _next(context);
