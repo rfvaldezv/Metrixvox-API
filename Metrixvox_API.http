@@ -1,0 +1,27 @@
+@host = http://localhost:5188
+@tenant = HOSPITAL_SAN_JOSE
+
+### 1) Cargar la encuesta (copia de aquí los "id" de las preguntas)
+GET {{host}}/api/v1/surveys/SURVEY_HOSPITAL_01
+X-Tenant-Id: {{tenant}}
+Accept: application/json
+
+### 2) Enviar una respuesta (reemplaza los GUID por los id reales del paso 1)
+POST {{host}}/api/v1/surveys/submit
+X-Tenant-Id: {{tenant}}
+Content-Type: application/json
+
+{
+  "surveyCode": "SURVEY_HOSPITAL_01",
+  "respondentContext": { "subjectId": null, "branchOrLocationId": "SUCURSAL_CENTRO", "channel": "TABLET" },
+  "metrics": [
+    { "category": "General", "metricKey": "REEMPLAZAR-GUID-1", "numericValue": 5, "weight": 1 },
+    { "category": "General", "metricKey": "REEMPLAZAR-GUID-2", "numericValue": 2, "weight": 1 }
+  ],
+  "sentimentAnalysis": { "verbatim": "La demora en caja fue excesiva y nadie atendió el llamado." }
+}
+
+### 3) Dashboard con datos reales
+GET {{host}}/api/v1/dashboard/metrics
+X-Tenant-Id: {{tenant}}
+Accept: application/json

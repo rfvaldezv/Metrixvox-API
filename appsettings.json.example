@@ -1,0 +1,13 @@
+﻿{
+  ""ConnectionStrings"": {
+    ""DefaultConnection"": ""Server=TU_SERVIDOR\MSSQLSERVER2019;Database=metrixvoxAPI;User Id=sa;Password=TU_PASSWORD;TrustServerCertificate=True;""
+  },
+  ""Logging"": {
+    ""LogLevel"": {
+      ""Default"": ""Information"",
+      ""Microsoft.AspNetCore"": ""Warning"",
+      ""Microsoft.EntityFrameworkCore.Database.Command"": ""Warning""
+    }
+  },
+  ""AllowedHosts"": ""*""
+}

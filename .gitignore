@@ -1,0 +1,35 @@
+﻿# ====== Build artifacts ======
+bin/
+obj/
+publish/
+publish_sc/
+
+# ====== Configuración local (NO subir) ======
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Local.json
+appsettings.json
+appsettings_limpio.txt
+
+# ====== Archivos auxiliares de desarrollo ======
+estructura.txt
+codigo_api.txt
+lista_api.txt
+*.tmp
+*.bak
+
+# ====== IDE ======
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# ====== OS ======
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ====== Logs ======
+*.log
+logs/
