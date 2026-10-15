@@ -16,14 +16,15 @@ namespace MetrixVox.Infrastructure.Persistence
         // Los filtros globales leen esta propiedad en cada consulta (por instancia de contexto).
         private string CurrentTenantId => _tenantContext.TenantId;
 
-	public DbSet<SurveyDefinition> SurveyDefinitions { get; set; }
-	public DbSet<SurveySection> SurveySections { get; set; }
-	public DbSet<SurveyQuestion> SurveyQuestions { get; set; }
-	public DbSet<SurveyResponseRecord> SurveyResponseRecords { get; set; }
-	public DbSet<MetricValueRecord> MetricValueRecords { get; set; }
-	public DbSet<AiInsight> AiInsights { get; set; }
-	public DbSet<User> Users { get; set; }   // 🆕
-	
+        public DbSet<SurveyDefinition> SurveyDefinitions { get; set; }
+        public DbSet<SurveySection> SurveySections { get; set; }
+        public DbSet<SurveyQuestion> SurveyQuestions { get; set; }
+        public DbSet<SurveyResponseRecord> SurveyResponseRecords { get; set; }
+        public DbSet<MetricValueRecord> MetricValueRecords { get; set; }
+        public DbSet<AiInsight> AiInsights { get; set; }
+        public DbSet<User> Users { get; set; }
+        public DbSet<Kiosk> Kiosks { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -94,22 +95,9 @@ namespace MetrixVox.Infrastructure.Persistence
                 e.HasQueryFilter(x => x.TenantId == CurrentTenantId);
             });
 
-	    // ============================================================
-	    // Users (tabla global — sin filtro por tenant, para login)
-	    // ============================================================
-	    modelBuilder.Entity<User>(e =>
-	    {
-	        e.Property(x => x.TenantId).HasMaxLength(64).IsRequired();
-	        e.Property(x => x.Email).HasMaxLength(200).IsRequired();
-	        e.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
-	        e.Property(x => x.FullName).HasMaxLength(200).IsRequired();
-	        e.Property(x => x.RefreshToken).HasMaxLength(500);
-	        e.HasIndex(x => x.Email).IsUnique();
-
-	        // ⚠️ IMPORTANTE: NO aplicar HasQueryFilter a Users.
-	        // El login debe poder buscar cualquier usuario sin saber el tenant todavía.
-	    });
-
+            // ============================================================
+            // Users (tabla global, sin filtro por tenant, para login)
+            // ============================================================
             modelBuilder.Entity<User>(e =>
             {
                 e.Property(x => x.TenantId).HasMaxLength(64).IsRequired();
@@ -119,8 +107,26 @@ namespace MetrixVox.Infrastructure.Persistence
                 e.Property(x => x.RefreshToken).HasMaxLength(500);
                 e.HasIndex(x => x.Email).IsUnique();
 
-                // ⚠️ IMPORTANTE: NO aplicar HasQueryFilter a Users.
-                // El login debe poder buscar cualquier usuario sin saber el tenant todavía.
+                // IMPORTANTE: NO aplicar HasQueryFilter a Users.
+                // El login debe poder buscar cualquier usuario sin saber el tenant todavia.
+            });
+
+            // ============================================================
+            // Kiosks (terminales fisicas)
+            // ============================================================
+            modelBuilder.Entity<Kiosk>(e =>
+            {
+                e.Property(x => x.TenantId).HasMaxLength(64).IsRequired();
+                e.Property(x => x.KioskToken).HasMaxLength(100).IsRequired();
+                e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+                e.Property(x => x.BranchName).HasMaxLength(100).IsRequired();
+                e.Property(x => x.SurveyCode).HasMaxLength(50).IsRequired();
+
+                e.HasIndex(x => x.KioskToken).IsUnique();
+                e.HasIndex(x => new { x.TenantId, x.Name });
+
+                // Filtro global por tenant (los kioscos si son por tenant)
+                e.HasQueryFilter(x => x.TenantId == CurrentTenantId);
             });
         }
 
@@ -137,22 +143,26 @@ namespace MetrixVox.Infrastructure.Persistence
         }
 
         // Garantiza que todo registro nuevo quede con el tenant activo (nunca el que venga en el body).
-	private void StampTenant()
-	{
-	    var tenantId = CurrentTenantId;
+        private void StampTenant()
+        {
+            var tenantId = CurrentTenantId;
 
-	    foreach (var entry in ChangeTracker.Entries<ITenantEntity>().Where(e => e.State == EntityState.Added))
-	    {
-        	// Los Users se crean desde seeds o por SuperAdmin, sin tenant activo.
-	        // No auto-asignamos TenantId porque el SuperAdmin puede crearlos con cualquier tenant.
-        	if (entry.Entity is User)
-	            continue;
+            foreach (var entry in ChangeTracker.Entries<ITenantEntity>().Where(e => e.State == EntityState.Added))
+            {
+                // Los Users se crean desde seeds o por SuperAdmin, sin tenant activo.
+                if (entry.Entity is User)
+                    continue;
 
-	        if (string.IsNullOrWhiteSpace(tenantId))
-        	    throw new InvalidOperationException("No hay un tenant activo: no se puede guardar información sin TenantId.");
+                // Si ya tiene TenantId asignado (ej. kiosco creado por SuperAdmin con override),
+                // respetarlo y no sobreescribir.
+                if (!string.IsNullOrWhiteSpace(entry.Entity.TenantId))
+                    continue;
 
-	        entry.Entity.TenantId = tenantId;
-	    }
-	}
+                if (string.IsNullOrWhiteSpace(tenantId))
+                    throw new InvalidOperationException("No hay un tenant activo: no se puede guardar información sin TenantId.");
+
+                entry.Entity.TenantId = tenantId;
+            }
+        }
     }
 }

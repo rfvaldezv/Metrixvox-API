@@ -7,7 +7,8 @@ namespace MetrixVox.Api.Middleware
     /// Resuelve el TenantId activo para cada request.
     /// Fuentes, en orden de prioridad:
     ///   1. Claim "tenantId" del JWT (usuarios autenticados)
-    ///   2. Header X-Tenant-Id (kioscos / legacy)
+    ///   2. Header X-Kiosk-Token (kioscos que se autoconfiguran)
+    ///   3. Header X-Tenant-Id (kioscos legacy / desarrollo)
     /// </summary>
     public class TenantMiddleware
     {
@@ -38,7 +39,9 @@ namespace MetrixVox.Api.Middleware
                 return;
             }
 
-            // 2) Header X-Tenant-Id (kioscos / legacy)
+            // 2) Header X-Tenant-Id (kioscos legacy / desarrollo)
+            // Nota: los kioscos que usan X-Kiosk-Token obtienen su tenant
+            // dentro del propio KioskService.GetByTokenAsync(), no aquí.
             var headerTenant = context.Request.Headers["X-Tenant-Id"].ToString().Trim().ToUpperInvariant();
             if (!string.IsNullOrWhiteSpace(headerTenant))
             {

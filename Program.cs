@@ -73,10 +73,8 @@ builder.Services.AddAuthorization();
 builder.Services.AddSingleton<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddAuthorization();
-
-// Servicios de autenticación
-builder.Services.AddSingleton<IJwtService, JwtService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
+// Servicios de kioscos
+builder.Services.AddScoped<IKioskService, KioskService>();   // 🆕
 
 // builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
