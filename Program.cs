@@ -19,9 +19,14 @@ builder.Services.AddCors(options =>
         }
         else
         {
-            policy.WithOrigins("https://app.metrixvox.com")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
+		policy.WithOrigins(
+		        "https://app.metrixvox.com",
+	        	"https://admin.metrixvox.com",
+	        	"http://localhost:8080",
+		        "http://localhost:5000",
+		        "http://localhost:5188")
+	      .AllowAnyHeader()
+	      .AllowAnyMethod();
         }
     });
 });
