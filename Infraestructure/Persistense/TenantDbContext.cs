@@ -24,6 +24,7 @@ namespace MetrixVox.Infrastructure.Persistence
         public DbSet<AiInsight> AiInsights { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<Kiosk> Kiosks { get; set; }
+        public DbSet<Tenant> Tenants { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -127,6 +128,21 @@ namespace MetrixVox.Infrastructure.Persistence
 
                 // Filtro global por tenant (los kioscos si son por tenant)
                 e.HasQueryFilter(x => x.TenantId == CurrentTenantId);
+            });
+
+            // ============================================================
+            // Tenants (clientes de la plataforma)
+            // ============================================================
+            modelBuilder.Entity<Tenant>(e =>
+            {
+                e.Property(x => x.TenantId).HasMaxLength(64).IsRequired();
+                e.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
+                e.Property(x => x.ContactEmail).HasMaxLength(200);
+
+                e.HasIndex(x => x.TenantId).IsUnique();
+
+                // ⚠️ NO aplicar HasQueryFilter a Tenants.
+                // El SuperAdmin necesita ver TODOS los tenants.
             });
         }
 
