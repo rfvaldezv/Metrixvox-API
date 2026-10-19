@@ -5,6 +5,10 @@ using Microsoft.IdentityModel.Tokens;
 using MetrixVox.Api.Middleware;
 using MetrixVox.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Infrastructure;
+
+// Configurar licencia de QuestPDF (Community para uso personal/pequeña empresa)
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
