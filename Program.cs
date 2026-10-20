@@ -43,8 +43,10 @@ builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantCon
 builder.Services.AddScoped<ISurveyDefinitionService, SurveyDefinitionService>();
 builder.Services.AddScoped<ISurveyManagementService, SurveyManagementService>();
 builder.Services.AddScoped<ISurveyIngestionService, SurveyIngestionService>();
-builder.Services.AddScoped<IAiAnalyticsService, AiAnalyticsService>();
+builder.Services.AddScoped<AdminReportsService>();
+builder.Services.AddHttpClient<IAiAnalyticsService, AiAnalyticsService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddHttpClient<IAiReportAnalysisService, AiReportAnalysisService>();
 
 // Base única: todos los clientes comparten tablas y se separan por TenantId (filtro global en TenantDbContext)
 builder.Services.AddDbContext<TenantDbContext>(options =>

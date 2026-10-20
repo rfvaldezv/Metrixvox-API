@@ -8,13 +8,19 @@ namespace MetrixVox.Domain.Entities
         public Guid Id { get; set; } = Guid.NewGuid();
         public string SurveyCode { get; set; } = string.Empty;
         public string TenantId { get; set; } = string.Empty;
-        public string? SubjectId { get; set; } // Huésped, Paciente o Cliente. En encuestas de empleados siempre queda en null (anónimo)
+        public string? SubjectId { get; set; }
         public string BranchOrLocationId { get; set; } = string.Empty;
-        public string Channel { get; set; } = string.Empty; // Tablet, QR, Web
+        public string Channel { get; set; } = string.Empty;
         public double GlobalCalculatedScore { get; set; }
-        public string? Verbatim { get; set; }   // Comentario libre del encuestado
-        public string? Sentiment { get; set; }  // Positive | Neutral | Negative (resultado del análisis de IA)
-        public string RawPayloadJson { get; set; } = string.Empty; // Respaldo del JSON recibido (vacío en encuestas de empleados)
+        public string? Verbatim { get; set; }
+        
+        // --- CAMPOS DE IA ---
+        public string? Sentiment { get; set; }
+        public string? DetectedCategory { get; set; } // NUEVO: Categoría detectada (ej. TiemposDeEspera)
+        public string? AiSummary { get; set; }        // NUEVO: Resumen/Recomendación de la IA
+        public bool RequiresImmediateAction { get; set; } // NUEVO: Bandera para alertas
+
+        public string RawPayloadJson { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public ICollection<MetricValueRecord> Metrics { get; set; } = new List<MetricValueRecord>();

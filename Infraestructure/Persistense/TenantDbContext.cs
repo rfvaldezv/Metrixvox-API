@@ -20,6 +20,7 @@ namespace MetrixVox.Infrastructure.Persistence
         public DbSet<SurveySection> SurveySections { get; set; }
         public DbSet<SurveyQuestion> SurveyQuestions { get; set; }
         public DbSet<SurveyResponseRecord> SurveyResponseRecords { get; set; }
+        public DbSet<AiReportAnalysis> AiReportAnalyses { get; set; }
         public DbSet<MetricValueRecord> MetricValueRecords { get; set; }
         public DbSet<AiInsight> AiInsights { get; set; }
         public DbSet<User> Users { get; set; }

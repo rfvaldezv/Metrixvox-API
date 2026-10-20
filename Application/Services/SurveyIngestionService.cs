@@ -3,6 +3,7 @@ using MetrixVox.Application.DTOs;
 using MetrixVox.Domain.Entities;
 using MetrixVox.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace MetrixVox.Application.Services
 {
@@ -30,7 +31,7 @@ namespace MetrixVox.Application.Services
 
         public async Task<SubmitResult> ProcessAndSaveResponseAsync(SubmitResponseDto dto)
         {
-            // 1. La encuesta debe existir para el tenant activo (el TenantId del body se ignora)
+            // 1. Buscar encuesta
             var code = (dto.SurveyCode ?? string.Empty).Trim();
             var survey = await _context.SurveyDefinitions
                 .AsNoTracking()
@@ -49,7 +50,7 @@ namespace MetrixVox.Application.Services
             if (answers.Count == 0 && verbatim.Length == 0)
                 return new SubmitResult(false, "La respuesta está vacía.");
 
-            // 2. Validar cada respuesta contra las preguntas reales; la categoría se toma de la sección en el servidor
+            // 2. Validar métricas
             var questions = survey.Sections
                 .SelectMany(sec => sec.Questions.Select(q => new { Question = q, Category = sec.Title }))
                 .ToDictionary(x => x.Question.Id.ToString(), x => x, StringComparer.OrdinalIgnoreCase);
@@ -75,29 +76,32 @@ namespace MetrixVox.Application.Services
                     Category = match.Category,
                     MetricKey = match.Question.Id.ToString(),
                     NumericValue = answer.NumericValue,
-                    Weight = 1.0 // El peso lo define el servidor, no el cliente
+                    Weight = 1.0 
                 });
             }
 
-            // 3. Promedio ponderado global
+            // 3. Promedio
             double totalWeights = metrics.Sum(m => m.Weight);
             double globalScore = totalWeights > 0 ? metrics.Sum(m => m.NumericValue * m.Weight) / totalWeights : 0;
 
-            // 4. Análisis del comentario libre (si falla la IA, la respuesta se guarda igual)
+            // 4. IA
             AiInsightResultDto? insight = null;
             if (verbatim.Length > 0)
             {
                 try
                 {
+                    Console.WriteLine($"🤖 IA analizando: {verbatim}");
                     insight = await _ai.AnalyzeVerbatimAsync(verbatim, survey.IndustryType);
+                    Console.WriteLine($"✅ IA Respondió: {insight?.Sentiment} - {insight?.DetectedCategory}");
                 }
                 catch (Exception ex)
                 {
+                    Console.WriteLine($"🔴 ERROR CRÍTICO DE IA: {ex.Message}");
                     _logger.LogError(ex, "Falló el análisis de IA del comentario; se guarda la respuesta sin sentimiento.");
                 }
             }
 
-            // 5. En encuestas de empleados se garantiza el anonimato: sin SubjectId ni JSON crudo
+            // 5. Crear Registro
             var isEmployee = string.Equals(survey.Scope, "Employee", StringComparison.OrdinalIgnoreCase);
 
             var record = new SurveyResponseRecord
@@ -108,7 +112,13 @@ namespace MetrixVox.Application.Services
                 Channel = dto.RespondentContext?.Channel ?? string.Empty,
                 GlobalCalculatedScore = globalScore,
                 Verbatim = verbatim.Length > 0 ? verbatim : null,
+                
+                // Campos de IA
                 Sentiment = insight?.Sentiment,
+                DetectedCategory = insight?.DetectedCategory,
+                AiSummary = insight?.SummaryDescription,
+                RequiresImmediateAction = insight?.RequiresImmediateAction ?? false,
+
                 RawPayloadJson = isEmployee ? string.Empty : JsonSerializer.Serialize(dto),
                 Metrics = metrics
             };
@@ -126,7 +136,6 @@ namespace MetrixVox.Application.Services
                 });
             }
 
-            // El TenantId se estampa automáticamente en SaveChangesAsync
             await _context.SaveChangesAsync();
             return new SubmitResult(true);
         }

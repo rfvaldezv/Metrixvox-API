@@ -1,21 +1,18 @@
+using System.Text.Json;
+using MetrixVox.Domain.Entities;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 
 namespace MetrixVox.Application.Reports
 {
-    /// <summary>
-    /// Genera reportes PDF ejecutivos con los datos del dashboard.
-    /// </summary>
     public class ReportGenerator
     {
-        public static byte[] GenerateExecutiveReport(ReportData data)
+        public static byte[] GenerateExecutiveReport(ReportData data, AiReportAnalysis? aiAnalysis)
         {
             var doc = Document.Create(container =>
             {
-                // ============================================================
                 // PÁGINA 1: PORTADA
-                // ============================================================
                 container.Page(page =>
                 {
                     page.Size(PageSizes.A4);
@@ -26,7 +23,6 @@ namespace MetrixVox.Application.Reports
                     {
                         col.Item().Height(150);
 
-                        // Logo (3 barras dibujadas)
                         col.Item().AlignCenter().Height(80).Row(row =>
                         {
                             row.ConstantItem(30).Height(40).Background("#FFFFFF");
@@ -38,7 +34,6 @@ namespace MetrixVox.Application.Reports
 
                         col.Item().Height(60);
 
-                        // Título
                         col.Item().AlignCenter().Text("METRIXVOX")
                             .FontSize(48).Bold().FontColor("#FFFFFF");
 
@@ -49,7 +44,6 @@ namespace MetrixVox.Application.Reports
 
                         col.Item().Height(80);
 
-                        // Tenant + fecha
                         col.Item().AlignCenter().Column(info =>
                         {
                             info.Item().Text(data.TenantName)
@@ -63,10 +57,9 @@ namespace MetrixVox.Application.Reports
 
                         col.Item().Height(60);
 
-                        // Footer con branding
                         col.Item().AlignBottom().Padding(40).Row(footer =>
                         {
-                            footer.RelativeItem().Text("Generado por MetrixVox")
+                            footer.RelativeItem().Text("Generado por MetrixVox IA")
                                 .FontSize(12).FontColor("#C7D2FE");
 
                             footer.RelativeItem().AlignRight()
@@ -76,9 +69,7 @@ namespace MetrixVox.Application.Reports
                     });
                 });
 
-                // ============================================================
-                // PÁGINA 2: RESUMEN EJECUTIVO
-                // ============================================================
+                // PÁGINA 2: RESUMEN EJECUTIVO Y KPIs
                 container.Page(page =>
                 {
                     page.Size(PageSizes.A4);
@@ -103,9 +94,22 @@ namespace MetrixVox.Application.Reports
                         col.Item().Height(10);
                         col.Item().Text($"Análisis de {data.TotalResponses} respuestas capturadas")
                             .FontSize(13).FontColor("#64748B");
+                        
+                        // NUEVO: Etiqueta de tamaño de muestra
+                        string sampleQuality = data.TotalResponses >= 100 ? "Muestra Robusta (Alta confiabilidad)" 
+                                            : data.TotalResponses >= 30 ? "Muestra Válida (Indicativa)" 
+                                            : "Muestra Insuficiente (Baja confiabilidad)";
+                        string sampleColor = data.TotalResponses >= 100 ? "#10B981" 
+                                           : data.TotalResponses >= 30 ? "#F59E0B" 
+                                           : "#F43F5E";
+                        
+                        col.Item().Height(5);
+                        col.Item().Text($"Calidad de la muestra: {sampleQuality}")
+                            .FontSize(11).Bold().FontColor(sampleColor);
+
                         col.Item().Height(30);
 
-                        // KPIs en grid
+                        // KPIs
                         col.Item().Row(row =>
                         {
                             KpiBox(row, "Score Global", data.GlobalScore.ToString("0.00"), "/ 5.0", "#10B981");
@@ -119,36 +123,20 @@ namespace MetrixVox.Application.Reports
 
                         col.Item().Height(40);
 
-                        // Análisis de sentimiento
+                        if (aiAnalysis != null)
+                        {
+                            col.Item().Text("Conclusiones de la IA").FontSize(18).Bold().FontColor("#0F172A");
+                            col.Item().Height(10);
+                            col.Item().Background("#F8FAFC").Padding(15).Text(aiAnalysis.ExecutiveSummary)
+                                .FontSize(11).FontColor("#334155").LineHeight(1.5f);
+                            col.Item().Height(30);
+                        }
+
                         col.Item().Text("Análisis de Sentimiento").FontSize(18).Bold().FontColor("#0F172A");
                         col.Item().Height(15);
 
                         col.Item().Text($"El {data.NeutralCount} de {data.TotalResponses} respuestas fueron clasificadas como neutrales por nuestro análisis de IA.")
                             .FontSize(11).FontColor("#475569");
-
-                        col.Item().Height(20);
-
-                        // Categorías
-                        col.Item().Text("Rendimiento por Categoría").FontSize(18).Bold().FontColor("#0F172A");
-                        col.Item().Height(15);
-
-                        foreach (var cat in data.Categories)
-                        {
-                            col.Item().Row(row =>
-                            {
-                                row.RelativeItem(3).Text(cat.Name).FontSize(12);
-                                row.RelativeItem(2).AlignRight()
-                                    .Text($"{cat.Score:0.00} / 5.0")
-                                    .FontSize(12).Bold().FontColor(CategoryColor(cat.Score));
-                            });
-                            col.Item().Height(5);
-                            col.Item().Height(8).Background("#E2E8F0").Row(r =>
-                            {
-                                r.RelativeItem((float)(cat.Score / 5.0)).Background(CategoryColor(cat.Score));
-                                r.RelativeItem((float)(1.0 - cat.Score / 5.0));
-                            });
-                            col.Item().Height(15);
-                        }
                     });
 
                     page.Footer().AlignCenter().Text(x =>
@@ -160,20 +148,65 @@ namespace MetrixVox.Application.Reports
                     });
                 });
 
-                // ============================================================
-                // PÁGINA 3: ANÁLISIS DETALLADO
-                // ============================================================
+                // PÁGINA 3: TOP PROBLEMAS (IA)
                 container.Page(page =>
                 {
                     page.Size(PageSizes.A4);
                     page.Margin(40);
 
-                    page.Header().Text("Análisis Detallado").FontSize(20).Bold().FontColor("#4F46E5");
+                    page.Header().Text("Análisis Detallado de Problemas").FontSize(20).Bold().FontColor("#4F46E5");
                     page.Content().PaddingVertical(15).Column(col =>
                     {
-                        col.Item().Text("Verbatims Relevantes").FontSize(16).Bold().FontColor("#0F172A");
-                        col.Item().Height(15);
+                        if (aiAnalysis != null && !string.IsNullOrEmpty(aiAnalysis.TopProblems))
+                        {
+                            var problems = JsonSerializer.Deserialize<List<AiProblemDto>>(aiAnalysis.TopProblems, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            
+                            if (problems != null)
+                            {
+                                foreach (var p in problems)
+                                {
+                                    col.Item().PaddingBottom(15).Column(c =>
+                                    {
+                                        c.Item().Row(r =>
+                                        {
+                                            r.RelativeItem().Text(p.Issue).FontSize(14).Bold().FontColor("#0F172A");
+                                            r.ConstantItem(60).AlignRight().Text($"{p.Percentage}%").FontSize(14).Bold().FontColor("#F43F5E");
+                                        });
+                                        c.Item().Height(5);
+                                        c.Item().Height(6).Background("#E2E8F0").Row(bar =>
+                                        {
+                                            bar.RelativeItem((float)(p.Percentage / 100.0)).Background("#F43F5E");
+                                            bar.RelativeItem((float)(1.0 - p.Percentage / 100.0));
+                                        });
+                                        c.Item().Height(10);
+                                        c.Item().Background("#F8FAFC").Padding(10).Row(rec =>
+                                        {
+                                            rec.ConstantItem(20).Text("Tip:").FontSize(11).Bold().FontColor("#4F46E5");
+                                            rec.RelativeItem().Text(p.Recommendation).FontSize(10).FontColor("#475569").Italic();
+                                        });
+                                    });
+                                }
+                            }
+                        }
+                        else
+                        {
+                            col.Item().Text("No se ha generado un análisis de IA para este periodo. Por favor, genere el reporte primero.")
+                                .FontSize(12).FontColor("#64748B");
+                        }
+                    });
 
+                    page.Footer().AlignCenter().Text(x => { x.Span("Página "); x.CurrentPageNumber(); });
+                });
+
+                // PÁGINA 4: VERBATIMS
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(40);
+
+                    page.Header().Text("Comentarios de Clientes").FontSize(20).Bold().FontColor("#4F46E5");
+                    page.Content().PaddingVertical(15).Column(col =>
+                    {
                         if (data.TopVerbatims.Any())
                         {
                             foreach (var v in data.TopVerbatims.Take(10))
@@ -195,61 +228,25 @@ namespace MetrixVox.Application.Reports
                         }
                     });
 
-                    page.Footer().AlignCenter().Text(x =>
-                    {
-                        x.Span("Página ");
-                        x.CurrentPageNumber();
-                    });
+                    page.Footer().AlignCenter().Text(x => { x.Span("Página "); x.CurrentPageNumber(); });
                 });
 
-                // ============================================================
-                // PÁGINA 4: CONCLUSIONES Y RECOMENDACIONES
-                // ============================================================
+                // PÁGINA 5: CIERRE
                 container.Page(page =>
                 {
                     page.Size(PageSizes.A4);
                     page.Margin(40);
 
-                    page.Header().Text("Conclusiones y Recomendaciones").FontSize(20).Bold().FontColor("#4F46E5");
-                    page.Content().PaddingVertical(15).Column(col =>
+                    page.Content().AlignMiddle().Column(col =>
                     {
-                        col.Item().Text("Análisis del Período").FontSize(16).Bold().FontColor("#0F172A");
-                        col.Item().Height(10);
-
-                        col.Item().Text(data.ExecutiveSummary).FontSize(11).FontColor("#475569");
-                        col.Item().Height(20);
-
-                        col.Item().Text("Recomendaciones Accionables").FontSize(16).Bold().FontColor("#0F172A");
-                        col.Item().Height(10);
-
-                        for (int i = 0; i < data.Recommendations.Count; i++)
+                        col.Item().AlignCenter().Background("#4F46E5").Padding(40).Column(f =>
                         {
-                            var rec = data.Recommendations[i];
-                            col.Item().Row(row =>
-                            {
-                                row.ConstantItem(30).Text($"{i + 1}.").FontSize(14).Bold().FontColor("#4F46E5");
-                                row.RelativeItem().Text(rec).FontSize(11).FontColor("#0F172A");
-                            });
-                            col.Item().Height(10);
-                        }
-
-                        col.Item().Height(30);
-
-                        // Footer con branding
-                        col.Item().Background("#4F46E5").Padding(20).Column(f =>
-                        {
-                            f.Item().Text("MetrixVox — Inteligencia de Cliente")
-                                .FontSize(14).Bold().FontColor("#FFFFFF");
-                            f.Item().Height(5);
-                            f.Item().Text("Powered by IA · Análisis automático de experiencia")
-                                .FontSize(10).FontColor("#E0E7FF");
+                            f.Item().AlignCenter().Text("MetrixVox — Inteligencia de Cliente")
+                                .FontSize(20).Bold().FontColor("#FFFFFF");
+                            f.Item().Height(10);
+                            f.Item().AlignCenter().Text("Powered by IA · Análisis automático de experiencia")
+                                .FontSize(12).FontColor("#E0E7FF");
                         });
-                    });
-
-                    page.Footer().AlignCenter().Text(x =>
-                    {
-                        x.Span("Página ");
-                        x.CurrentPageNumber();
                     });
                 });
             });
@@ -270,19 +267,16 @@ namespace MetrixVox.Application.Reports
                 }
             });
         }
-
-        private static string CategoryColor(double score)
-        {
-            if (score >= 4.5) return "#10B981";
-            if (score >= 3.5) return "#0EA5E9";
-            if (score >= 2.5) return "#F59E0B";
-            return "#F43F5E";
-        }
     }
 
-    // ============================================================
-    // MODELOS DE DATOS PARA EL REPORTE
-    // ============================================================
+    // DTOs
+    public class AiProblemDto
+    {
+        public string Issue { get; set; } = string.Empty;
+        public int Percentage { get; set; }
+        public string Recommendation { get; set; } = string.Empty;
+    }
+
     public class ReportData
     {
         public string TenantName { get; set; } = "";
