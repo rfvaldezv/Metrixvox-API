@@ -3,6 +3,7 @@ using MetrixVox.Application.DTOs;
 using MetrixVox.Domain.Entities;
 using MetrixVox.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace MetrixVox.Application.Services
 {
@@ -24,21 +25,15 @@ namespace MetrixVox.Application.Services
             var kiosk = await _context.Kiosks
                 .IgnoreQueryFilters()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(k => k.KioskToken == kioskToken && k.IsActive);
+                .FirstOrDefaultAsync(k => k.KioskToken == kioskToken && k.IsActive && k.IsPaired);
 
             if (kiosk == null) return null;
 
             // Actualizar LastSeenAt en background
             _ = Task.Run(async () =>
             {
-                try
-                {
-                    await TouchAsync(kiosk.Id);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "No se pudo actualizar LastSeenAt del kiosco {KioskId}", kiosk.Id);
-                }
+                try { await TouchAsync(kiosk.Id); }
+                catch (Exception ex) { _logger.LogWarning(ex, "No se pudo actualizar LastSeenAt del kiosco {KioskId}", kiosk.Id); }
             });
 
             return new KioskConfigDto
@@ -69,12 +64,11 @@ namespace MetrixVox.Application.Services
                 BranchName = request.BranchName.Trim(),
                 SurveyCode = request.SurveyCode.Trim(),
                 IsActive = true,
+                IsPaired = false,
                 CreatedAt = DateTime.UtcNow,
                 CreatedByUserId = createdByUserId,
             };
 
-            // Si viene override (SuperAdmin), asignar el tenant explícitamente.
-            // StampTenant respetará este valor porque ya no está vacío.
             if (!string.IsNullOrWhiteSpace(tenantOverride))
             {
                 kiosk.TenantId = tenantOverride.Trim().ToUpperInvariant();
@@ -83,15 +77,12 @@ namespace MetrixVox.Application.Services
             _context.Kiosks.Add(kiosk);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Kiosco creado: {Name} ({Tenant}) → token {Token}",
-                kiosk.Name, kiosk.TenantId, kiosk.KioskToken);
+            _logger.LogInformation("Kiosco creado: {Name} ({Tenant})", kiosk.Name, kiosk.TenantId);
 
             return new CreateKioskResponse
             {
                 Kiosk = MapToDto(kiosk),
-                KioskToken = kiosk.KioskToken,
-                Message = $"Kiosco '{kiosk.Name}' creado en tenant {kiosk.TenantId}. " +
-                          $"Configura este token en la terminal: {kiosk.KioskToken}"
+                Message = $"Kiosco '{kiosk.Name}' creado. Genera un código de vinculación desde el panel para emparejar la tablet."
             };
         }
 
@@ -132,6 +123,74 @@ namespace MetrixVox.Application.Services
             }
         }
 
+        // ==========================================
+        // LÓGICA DE PAIRING (NUEVA)
+        // ==========================================
+
+        public async Task<string> GeneratePairingCodeAsync(Guid kioskId)
+        {
+            var kiosk = await _context.Kiosks.IgnoreQueryFilters().FirstOrDefaultAsync(k => k.Id == kioskId);
+            if (kiosk == null) throw new KeyNotFoundException("Kiosco no encontrado");
+
+            // Generar código de 6 caracteres alfanuméricos
+            var code = Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant();
+            
+            kiosk.PairingCode = code;
+            kiosk.PairingCodeExpiresAt = DateTime.UtcNow.AddMinutes(15);
+            kiosk.IsPaired = false; 
+            
+            // Rotamos el token por seguridad
+            kiosk.KioskToken = GenerateKioskToken(); 
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Código de vinculación generado para kiosco {KioskId}: {Code}", kioskId, code);
+            
+            return code;
+        }
+
+        public async Task<KioskConfigDto?> PairDeviceAsync(string pairingCode)
+        {
+            if (string.IsNullOrWhiteSpace(pairingCode)) return null;
+
+            var kiosk = await _context.Kiosks
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(k => k.PairingCode == pairingCode.Trim().ToUpperInvariant());
+
+            if (kiosk == null || kiosk.PairingCodeExpiresAt < DateTime.UtcNow || !kiosk.IsActive)
+                return null;
+
+            kiosk.IsPaired = true;
+            kiosk.PairingCode = null;
+            kiosk.PairingCodeExpiresAt = null;
+            kiosk.LastSeenAt = DateTime.UtcNow;
+            
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Tablet vinculada exitosamente al kiosco {KioskId}", kiosk.Id);
+
+            return new KioskConfigDto
+            {
+                KioskToken = kiosk.KioskToken,
+                TenantId = kiosk.TenantId,
+                SurveyCode = kiosk.SurveyCode,
+                BranchName = kiosk.BranchName,
+                KioskName = kiosk.Name,
+            };
+        }
+
+        public async Task<bool> RevokePairingAsync(Guid kioskId)
+        {
+            var kiosk = await _context.Kiosks.IgnoreQueryFilters().FirstOrDefaultAsync(k => k.Id == kioskId);
+            if (kiosk == null) return false;
+
+            kiosk.IsPaired = false;
+            kiosk.KioskToken = GenerateKioskToken(); // Invalida el token de la tablet vieja
+            
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        // ==========================================
+
         private static KioskDto MapToDto(Kiosk k) => new()
         {
             Id = k.Id,
@@ -139,8 +198,8 @@ namespace MetrixVox.Application.Services
             Name = k.Name,
             BranchName = k.BranchName,
             SurveyCode = k.SurveyCode,
-            KioskToken = k.KioskToken,
             IsActive = k.IsActive,
+            IsPaired = k.IsPaired,
             CreatedAt = k.CreatedAt,
             LastSeenAt = k.LastSeenAt,
         };
@@ -150,10 +209,7 @@ namespace MetrixVox.Application.Services
             var bytes = new byte[32];
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(bytes);
-            return Convert.ToBase64String(bytes)
-                .Replace("+", "-")
-                .Replace("/", "_")
-                .Replace("=", "");
+            return Convert.ToBase64String(bytes).Replace("+", "-").Replace("/", "_").Replace("=", "");
         }
     }
 }

@@ -27,6 +27,21 @@ namespace MetrixVox.Domain.Entities
         /// <summary>Código de encuesta que debe mostrar.</summary>
         public string SurveyCode { get; set; } = string.Empty;
 
+        // ==========================================
+        // NUEVAS PROPIEDADES PARA PAIRING FLOW
+        // ==========================================
+
+        /// <summary>Código temporal de 6 caracteres para vincular la tablet.</summary>
+        public string? PairingCode { get; set; }
+
+        /// <summary>Indica si la tablet ya fue vinculada exitosamente.</summary>
+        public bool IsPaired { get; set; } = false;
+
+        /// <summary>Fecha de expiración del PairingCode (15 min de validez).</summary>
+        public DateTime? PairingCodeExpiresAt { get; set; }
+
+        // ==========================================
+
         public bool IsActive { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -84,6 +84,9 @@ namespace Metrixvox_API.Infraestructure.Persistense.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsPaired")
+                        .HasColumnType("bit");
+
                     b.Property<string>("KioskToken")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -96,6 +99,12 @@ namespace Metrixvox_API.Infraestructure.Persistense.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PairingCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PairingCodeExpiresAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("SurveyCode")
                         .IsRequired()
@@ -220,7 +229,9 @@ namespace Metrixvox_API.Infraestructure.Persistense.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<double>("Weight")
-                        .HasColumnType("float");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("float")
+                        .HasDefaultValue(1.0);
 
                     b.HasKey("Id");
 

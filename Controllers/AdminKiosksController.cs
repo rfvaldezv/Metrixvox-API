@@ -18,7 +18,6 @@ namespace MetrixVox.Api.Controllers
             _kioskService = kioskService;
         }
 
-        /// <summary>GET /api/v1/admin/kiosks</summary>
         [HttpGet]
         public async Task<IActionResult> List()
         {
@@ -26,29 +25,22 @@ namespace MetrixVox.Api.Controllers
             return Ok(kiosks);
         }
 
-	/// <summary>POST /api/v1/admin/kiosks</summary>
-	[HttpPost]
-	public async Task<IActionResult> Create([FromBody] CreateKioskRequest request)
-	{
-	    if (!ModelState.IsValid)
-	        return BadRequest(ModelState);
-	
-	    Guid? userId = null;
-	    var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-	    if (Guid.TryParse(userIdStr, out var parsed))
-	        userId = parsed;
-	
-	    // SuperAdmin puede impersonar un tenant pasando TenantIdOverride
-	    var role = User.FindFirstValue("role") ?? User.FindFirstValue(ClaimTypes.Role) ?? "";
-	    var tenantOverride = role == "SuperAdmin"
-	        ? request.TenantIdOverride
-	        : null;
-	
-	    var result = await _kioskService.CreateAsync(request, userId, tenantOverride);
-	    return CreatedAtAction(nameof(GetById), new { id = result.Kiosk.Id }, result);
-	}
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] CreateKioskRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        /// <summary>GET /api/v1/admin/kiosks/{id}</summary>
+            Guid? userId = null;
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            if (Guid.TryParse(userIdStr, out var parsed)) userId = parsed;
+
+            var role = User.FindFirstValue("role") ?? User.FindFirstValue(ClaimTypes.Role) ?? "";
+            var tenantOverride = role == "SuperAdmin" ? request.TenantIdOverride : null;
+
+            var result = await _kioskService.CreateAsync(request, userId, tenantOverride);
+            return CreatedAtAction(nameof(GetById), new { id = result.Kiosk.Id }, result);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
@@ -57,23 +49,42 @@ namespace MetrixVox.Api.Controllers
             return kiosk == null ? NotFound() : Ok(kiosk);
         }
 
-        /// <summary>PUT /api/v1/admin/kiosks/{id}</summary>
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateKioskRequest request)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
             var updated = await _kioskService.UpdateAsync(id, request);
             return updated == null ? NotFound() : Ok(updated);
         }
 
-        /// <summary>DELETE /api/v1/admin/kiosks/{id} (soft delete)</summary>
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var deleted = await _kioskService.DeleteAsync(id);
             return deleted ? NoContent() : NotFound();
+        }
+
+        // --- ENDPOINTS DE PAIRING ---
+
+        /// <summary>POST /api/v1/admin/kiosks/{id}/generate-pairing-code</summary>
+        [HttpPost("{id}/generate-pairing-code")]
+        public async Task<IActionResult> GeneratePairingCode(Guid id)
+        {
+            try
+            {
+                var code = await _kioskService.GeneratePairingCodeAsync(id);
+                return Ok(new { pairingCode = code, message = "Código generado. Válido por 15 minutos." });
+            }
+            catch (KeyNotFoundException) { return NotFound(new { error = "Kiosco no encontrado." }); }
+        }
+
+        /// <summary>POST /api/v1/admin/kiosks/{id}/revoke-pairing</summary>
+        [HttpPost("{id}/revoke-pairing")]
+        public async Task<IActionResult> RevokePairing(Guid id)
+        {
+            var result = await _kioskService.RevokePairingAsync(id);
+            return result ? Ok(new { message = "Vinculación revocada. La tablet deberá vincularse de nuevo." }) : NotFound();
         }
     }
 }
