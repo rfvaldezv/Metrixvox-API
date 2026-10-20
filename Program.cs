@@ -41,6 +41,7 @@ builder.Services.AddScoped<TenantContext>();
 builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
 
 builder.Services.AddScoped<ISurveyDefinitionService, SurveyDefinitionService>();
+builder.Services.AddScoped<ISurveyManagementService, SurveyManagementService>();
 builder.Services.AddScoped<ISurveyIngestionService, SurveyIngestionService>();
 builder.Services.AddScoped<IAiAnalyticsService, AiAnalyticsService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
