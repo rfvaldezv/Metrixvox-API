@@ -1,6 +1,5 @@
 namespace MetrixVox.Application.DTOs
 {
-    // Estructura que consume la App Flutter (nombres en camelCase al serializarse)
     public class SurveyDto
     {
         public string SurveyCode { get; set; } = string.Empty;
@@ -19,7 +18,9 @@ namespace MetrixVox.Application.DTOs
     {
         public Guid Id { get; set; }
         public string Text { get; set; } = string.Empty;
-        public string Type { get; set; } = string.Empty;
+        public string Type { get; set; } = "CSAT_5";
         public bool IsRequired { get; set; }
+        public double Weight { get; set; }
+        public string? OptionsJson { get; set; }
     }
 }

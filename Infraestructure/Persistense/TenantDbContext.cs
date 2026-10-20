@@ -51,16 +51,20 @@ namespace MetrixVox.Infrastructure.Persistence
                 e.HasQueryFilter(x => x.SurveyDefinition!.TenantId == CurrentTenantId);
             });
 
-            modelBuilder.Entity<SurveyQuestion>(e =>
-            {
-                e.Property(x => x.Text).HasMaxLength(500).IsRequired();
-                e.Property(x => x.QuestionType).HasMaxLength(30).IsRequired();
-                e.HasOne(x => x.SurveySection)
-                    .WithMany(x => x.Questions)
-                    .HasForeignKey(x => x.SurveySectionId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                e.HasQueryFilter(x => x.SurveySection!.SurveyDefinition!.TenantId == CurrentTenantId);
-            });
+modelBuilder.Entity<SurveyQuestion>(e =>
+{
+    e.Property(x => x.Text).HasMaxLength(500).IsRequired();
+    e.Property(x => x.QuestionType).HasMaxLength(30).IsRequired();
+    e.HasOne(x => x.SurveySection)
+        .WithMany(x => x.Questions)
+        .HasForeignKey(x => x.SurveySectionId)
+        .OnDelete(DeleteBehavior.Cascade);
+    e.HasQueryFilter(x => x.SurveySection!.SurveyDefinition!.TenantId == CurrentTenantId);
+    
+    // 🆕 Nuevas columnas
+    e.Property(x => x.Weight).HasDefaultValue(1.0);
+    e.Property(x => x.OptionsJson).HasColumnType("nvarchar(max)");
+});
 
             modelBuilder.Entity<SurveyResponseRecord>(e =>
             {
